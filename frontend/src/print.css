@@ -1,0 +1,20 @@
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-quotation,
+  #printable-quotation * {
+    visibility: visible;
+  }
+  #printable-quotation {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: block !important;
+  }
+  @page {
+    margin: 15mm;
+    size: A4;
+  }
+}

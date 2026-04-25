@@ -1,0 +1,341 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  password     String
+  role         String   @default("EXECUTIVE") // ADMIN, CO_ADMIN, EXECUTIVE
+  avatar       String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  leads              Lead[]          @relation("AssignedLeads")
+  createdLeads       Lead[]          @relation("CreatedLeads")
+  interactions       Interaction[]
+  attachments        Attachment[]
+  reminders          Reminder[]
+  quotationsCreated  Quotation[]     @relation("QuotationCreatedBy")
+  quotationsReviewed Quotation[]     @relation("QuotationReviewedBy")
+  paymentEntries     PaymentEntry[]
+}
+
+model Lead {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String
+  phone2        String?
+  email         String?
+  city          String?
+  source        String   @default("OTHER")
+  sourceDetail  String?
+  projectType   String   @default("RESIDENTIAL")
+  propertyType  String?
+  areaSqft      Int?
+  rooms         Int?
+  style         String?
+  budget        String   @default("NOT_DISCLOSED")
+  expectedStart String?
+  notes         String?
+  status        String   @default("NEW")
+  lostReason    String?
+  tags          String   @default("[]")
+  assignedToId  String?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assignedTo   User?         @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  createdBy    User          @relation("CreatedLeads", fields: [createdById], references: [id])
+  interactions Interaction[]
+  attachments  Attachment[]
+  reminders    Reminder[]
+  projects     Project[]
+  quotations   Quotation[]
+}
+
+model Interaction {
+  id           String             @id @default(cuid())
+  leadId       String
+  userId       String
+  type         String
+  summary      String
+  outcome      String             @default("NEUTRAL")
+  followUpDate DateTime?
+  createdAt    DateTime           @default(now())
+
+  lead   Lead               @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user   User               @relation(fields: [userId], references: [id])
+  images InteractionImage[]
+}
+
+model InteractionImage {
+  id            String      @id @default(cuid())
+  interactionId String
+  fileUrl       String
+  fileName      String
+  publicId      String?
+  caption       String?
+  createdAt     DateTime    @default(now())
+
+  interaction Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  leadId    String
+  userId    String
+  fileUrl   String
+  fileName  String
+  fileType  String
+  publicId  String?
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Reminder {
+  id        String   @id @default(cuid())
+  leadId    String
+  userId    String
+  dueDate   DateTime
+  note      String?
+  isDone    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ── MASTER LIST ───────────────────────────────────────────────────────────────
+
+model MasterItem {
+  id          String   @id @default(cuid())
+  category    String   // MATERIAL, PRODUCT, SERVICE, FIXTURE, FURNITURE, CIVIL
+  name        String
+  description String?
+  unit        String   // SQFT, RFT, PER_UNIT, LOT, HOURS
+  baseRate    Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quotationItems QuotationItem[]
+}
+
+// ── PROJECT (after lead is WON) ───────────────────────────────────────────────
+
+model Project {
+  id              String    @id @default(cuid())
+  leadId          String
+  refNo           String    @unique
+  title           String
+  clientName      String
+  clientPhone     String
+  clientEmail     String?
+  projectAddress  String?
+  projectType     String    @default("RESIDENTIAL")
+  designerName    String?
+  projectManager  String?
+  executionLead   String?
+  areaSqft        Int?
+  status          String    @default("ACTIVE") // ACTIVE, ON_HOLD, COMPLETED, CANCELLED
+  expectedEnd     DateTime?
+  actualEnd       DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  lead             Lead              @relation(fields: [leadId], references: [id])
+  quotations       Quotation[]
+  designPhases     DesignPhase[]
+  paymentSchedule  ProjectPayment[]
+  siteImages       SiteImage[]
+}
+
+// ── QUOTATION ─────────────────────────────────────────────────────────────────
+
+model Quotation {
+  id             String    @id @default(cuid())
+  leadId         String
+  projectId      String?
+  refNo          String
+  version        Int       @default(1)
+  status         String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, SENT, REJECTED
+  gstType        String    @default("NONE")  // FULL, HALF, NONE
+  gstPercent     Decimal?  @db.Decimal(5, 2)
+  discountAmount Decimal?  @db.Decimal(10, 2)
+  discountNote   String?
+  reviewNote     String?
+  createdById    String
+  reviewedById   String?
+  sentAt         DateTime?
+  signedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  lead            Lead                      @relation(fields: [leadId], references: [id])
+  project         Project?                  @relation(fields: [projectId], references: [id])
+  createdBy       User                      @relation("QuotationCreatedBy", fields: [createdById], references: [id])
+  reviewedBy      User?                     @relation("QuotationReviewedBy", fields: [reviewedById], references: [id])
+  rooms           QuotationRoom[]
+  paymentSchedule QuotationPaymentMilestone[]
+  signoffDoc      SignoffDocument?
+}
+
+model QuotationRoom {
+  id          String          @id @default(cuid())
+  quotationId String
+  name        String
+  sortOrder   Int             @default(0)
+
+  quotation Quotation       @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  items     QuotationItem[]
+}
+
+model QuotationItem {
+  id           String        @id @default(cuid())
+  roomId       String
+  masterItemId String?
+  description  String
+  unit         String
+  qty          Decimal       @db.Decimal(10, 3)
+  unitRate     Decimal       @db.Decimal(10, 2)
+  amount       Decimal       @db.Decimal(10, 2)
+  remarks      String?
+  hasRevision  Boolean       @default(false)
+  revisionNote String?
+  sortOrder    Int           @default(0)
+
+  room       QuotationRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  masterItem MasterItem?   @relation(fields: [masterItemId], references: [id])
+}
+
+model QuotationPaymentMilestone {
+  id          String    @id @default(cuid())
+  quotationId String
+  milestone   String
+  percentage  Decimal   @db.Decimal(5, 2)
+  amount      Decimal   @db.Decimal(10, 2)
+  sortOrder   Int       @default(0)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+}
+
+model SignoffDocument {
+  id             String   @id @default(cuid())
+  quotationId    String   @unique
+  scopeIncludes  String   @default("[]")
+  scopeExcludes  String   @default("[]")
+  materialNotes  String?
+  generatedAt    DateTime @default(now())
+  signedAt       DateTime?
+  notes          String?
+
+  quotation Quotation @relation(fields: [quotationId], references: [id])
+}
+
+// ── DESIGN APPROVAL ────────────────────────────────────────────────────────────
+
+model DesignPhase {
+  id        String        @id @default(cuid())
+  projectId String
+  name      String        // Concept Render, Floor Plan, 3D View, Material Board, etc.
+  status    String        @default("PENDING") // PENDING, APPROVED, REVISION
+  clientNote String?
+  sortOrder Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  images  DesignImage[]
+}
+
+model DesignImage {
+  id        String   @id @default(cuid())
+  phaseId   String
+  fileUrl   String
+  fileName  String
+  publicId  String?
+  version   Int      @default(1)
+  status    String   @default("PENDING") // PENDING, APPROVED, REVISION
+  note      String?
+  createdAt DateTime @default(now())
+
+  phase DesignPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+}
+
+// ── SITE PROGRESS IMAGES ──────────────────────────────────────────────────────
+
+model SiteImage {
+  id        String   @id @default(cuid())
+  projectId String
+  fileUrl   String
+  fileName  String
+  publicId  String?
+  caption   String?
+  takenAt   DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ── FINANCE ───────────────────────────────────────────────────────────────────
+
+model ProjectPayment {
+  id        String   @id @default(cuid())
+  projectId String
+  milestone String
+  amount    Decimal  @db.Decimal(10, 2)
+  dueDate   DateTime?
+  status    String   @default("PENDING") // PENDING, PARTIAL, PAID
+  sortOrder Int      @default(0)
+
+  project  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entries  PaymentEntry[]
+}
+
+model PaymentEntry {
+  id          String    @id @default(cuid())
+  milestoneId String?
+  projectId   String?
+  type        String    // PAY_IN, PAY_OUT
+  partyType   String    // CLIENT, VENDOR, CONTRACTOR, EMPLOYEE, SHOP, OTHER
+  partyName   String
+  amount      Decimal   @db.Decimal(10, 2)
+  paymentMode String    @default("CASH") // CASH, ONLINE
+  description String?
+  receiptUrl  String?
+  publicId    String?
+  entryDate   DateTime  @default(now())
+  isVoid      Boolean   @default(false)
+  voidReason  String?
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  milestone ProjectPayment? @relation(fields: [milestoneId], references: [id])
+  createdBy User            @relation(fields: [createdById], references: [id])
+}
+
+model FixedCost {
+  id          String    @id @default(cuid())
+  month       Int
+  year        Int
+  category    String    // RENT, SALARY, MAINTENANCE, UTILITY, OTHER
+  description String
+  amount      Decimal   @db.Decimal(10, 2)
+  paidDate    DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
